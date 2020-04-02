@@ -123,10 +123,10 @@ int TmpGraph::buildGraph() {
     // delete not used node, set some Const node to isCovered
     this->_genMinGraph();
 
-    if (!(this->_allOpSupported())) {
-        DLOG(FATAL) << "===========This Model Has "
-                       "NOT_SUPPORTED_OP===========!!!";
-    }
+    //    if (!(this->_allOpSupported())) {
+    //        DLOG(FATAL) << "===========This Model Has "
+    //                       "NOT_SUPPORTED_OP===========!!!";
+    //    }
 
     // set in and out tensor names
     const int node_count = _tfGraph.node_size();
@@ -263,7 +263,7 @@ void TmpGraph::_genMinGraph() {
             }
         }
         // next node is BiasAdd
-        else if (typeOp == "Conv2D" || typeOp == "DepthwiseConv2dNative" || typeOp == "Conv2DBackpropInput") {
+        else if (typeOp == "Conv3D" || typeOp == "Conv2D" || typeOp == "DepthwiseConv2dNative" || typeOp == "Conv2DBackpropInput") {
             parentNode = this->_getTmpNode(curNode->inEdges[1]);
 
             if (parentNode->opType == "Identity") {
@@ -316,8 +316,8 @@ void TmpGraph::_genMinGraph() {
                 DCHECK(inputNode->opType == "Const") << "FusedBatchNorm|SpaceToBatchND Lack Const Tensor";
                 inputNode->isCovered = true;
             }
-        } else if (typeOp == "Reshape" || typeOp == "ArgMax") {
-            DCHECK(curNode->inEdges.size() == 2) << "Reshape|ArgMax Should Have Two Input!!! ===> " << curNode->opName;
+        } else if (typeOp == "Reshape" || typeOp == "ArgMax" || typeOp == "ArgMin") {
+            DCHECK(curNode->inEdges.size() == 2) << "Reshape|ArgMax|ArgMin Should Have Two Input!!! ===> " << curNode->opName;
             TmpNode *shapeNode = this->_getTmpNode(curNode->inEdges[1]);
             // DCHECK(shapeNode->opType == "Const") << "Reshape  Now Only Support
             // Const Shape Input!!! ===> " << curNode->opName;
@@ -346,7 +346,7 @@ void TmpGraph::_genMinGraph() {
             DCHECK(dimInput->opType == "Const") << "Split Have no axis Input!!! => " << curNode->opName;
             dimInput->isCovered = true;
         } else if (typeOp == "ResizeBilinear" || typeOp == "Mean" || typeOp == "Sum" || typeOp == "Max" ||
-                   typeOp == "Min" || typeOp == "Prod" || typeOp == "ArgMax" || typeOp == "Moments") {
+                   typeOp == "Min" || typeOp == "Prod" || typeOp == "ArgMax" || typeOp == "ArgMin" || typeOp == "Moments") {
             // size input
             parentNode = this->_getTmpNode(curNode->inEdges[1]);
             // const op read

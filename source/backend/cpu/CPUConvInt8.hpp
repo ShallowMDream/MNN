@@ -9,7 +9,7 @@
 #ifndef CPUConvInt8_hpp
 #define CPUConvInt8_hpp
 
-#include "CPUConvolution.hpp"
+#include "backend/cpu/CPUConvolution.hpp"
 
 namespace MNN {
 
@@ -36,6 +36,31 @@ private:
     // Tensor mTempDstBuffer;
     Tensor mTempRemainBuffer;
 };
+
+#ifdef ENABLE_ARMV82
+class CPUConvArm82Int8 : public CPUConvolution {
+public:
+    CPUConvArm82Int8(Backend *backend, const MNN::Convolution2D *convParam);
+    virtual ~CPUConvArm82Int8();
+    virtual ErrorCode onResize(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) override;
+    virtual ErrorCode onExecute(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) override;
+
+private:
+    // relu or relu6
+    bool mRelu;
+
+    std::shared_ptr<Tensor> mWeightInt8;
+    std::shared_ptr<Tensor> mBiasInt32;
+    std::shared_ptr<Tensor> mScaleFloat;
+
+    CPUConvolution::Im2ColParameter mIm2ColParamter;
+    int mTileCount;
+    int mThreadNums;
+
+    Tensor mTempIm2ColBuffer;
+    Tensor mTempRemainBuffer;
+};
+#endif
 
 } // namespace MNN
 

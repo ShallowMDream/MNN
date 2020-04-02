@@ -9,8 +9,8 @@
 #ifndef ConvolutionWinograd3d_hpp
 #define ConvolutionWinograd3d_hpp
 
-#include "CPUConvolution3D.hpp"
-#include "WinogradOptFunction.hpp"
+#include "backend/cpu/CPUConvolution3D.hpp"
+#include "backend/cpu/compute/WinogradOptFunction.hpp"
 
 namespace MNN {
 class ConvolutionWinograd3D : public Execution {
@@ -29,6 +29,7 @@ public:
 private:
     int mUnit;
     int mAlpha;
+    PadMode mPadMode;
     std::vector<int> mKernels;
     std::vector<int> mPads;
     CPUConvolution3D::POSTFUNCTION mPostFunction;

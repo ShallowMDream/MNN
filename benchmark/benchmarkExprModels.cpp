@@ -16,10 +16,10 @@
 #include <sys/types.h>
 #endif
 
-#include "tools/converter/source/IR/MNN_generated.h"
-#include "MNNForwardType.h"
-#include "Interpreter.hpp"
-#include "Expr.hpp"
+#include "MNN_generated.h"
+#include <MNN/MNNForwardType.h>
+#include <MNN/Interpreter.hpp>
+#include <MNN/expr/Expr.hpp>
 #include "ExprModels.hpp"
 
 using namespace MNN;
@@ -83,7 +83,7 @@ static void displayStats(const std::string& name, const std::vector<float>& cost
 
 static std::vector<float> runNet(VARP netOutput, const ScheduleConfig& config, int loop) {
     std::unique_ptr<NetT> netTable(new NetT);
-    netOutput->render(netTable.get());
+    Variable::save({netOutput}, netTable.get());
     flatbuffers::FlatBufferBuilder builder(1024);
     auto offset = CreateNet(builder, netTable.get());
     builder.Finish(offset);
@@ -100,24 +100,24 @@ static std::vector<float> runNet(VARP netOutput, const ScheduleConfig& config, i
     }
     auto outputTensor = net->getSessionOutput(session, NULL);
     std::shared_ptr<Tensor> outputTensorHost(Tensor::createHostTensorFromDevice(outputTensor, false));
-    
+
     // Warming up...
     for (int i = 0; i < 3; ++i) {
         inputTensor->copyFromHostTensor(inputTensorHost.get());
         net->runSession(session);
         outputTensor->copyToHostTensor(outputTensorHost.get());
     }
-    
+
     std::vector<float> costs;
-    
+
     // start run
     for (int i = 0; i < loop; ++i) {
         auto timeBegin = getTimeInUs();
-        
+
         inputTensor->copyFromHostTensor(inputTensorHost.get());
         net->runSession(session);
         outputTensor->copyToHostTensor(outputTensorHost.get());
-        
+
         auto timeEnd = getTimeInUs();
         costs.push_back((timeEnd - timeBegin) / 1000.0);
     }
@@ -184,7 +184,7 @@ int main(int argc, const char* argv[]) {
     config.backendConfig = &bnConfig;
 
     std::vector<float> costs;
-    
+
     // ResNet18 benchmark
     for (auto model : models) {
         auto modelArgs = splitArgs(model.c_str(), "_");
@@ -229,4 +229,3 @@ int main(int argc, const char* argv[]) {
     }
     return 0;
 }
-

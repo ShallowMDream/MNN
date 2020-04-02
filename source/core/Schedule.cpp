@@ -6,17 +6,17 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 
-#include "Schedule.hpp"
+#include "core/Schedule.hpp"
 #include <algorithm>
 #include <iterator>
 #include <set>
 #include <unordered_map>
-#include "DirectedAcyclicGraph.hpp"
-#include "Macro.h"
-#include "TensorUtils.hpp"
-#include "SizeComputer.hpp"
+#include "core/DirectedAcyclicGraph.hpp"
+#include "core/Macro.h"
+#include "core/TensorUtils.hpp"
+#include "core/SizeComputer.hpp"
 //#define MNN_OPEN_TIME_TRACE
-#include "AutoTime.hpp"
+#include <MNN/AutoTime.hpp>
 //#define MNN_AUTO_CHECK_COST
 namespace MNN {
 
@@ -326,6 +326,7 @@ Schedule::ScheduleInfo Schedule::schedule(const Net* net, const std::vector<Sche
         return schedule;
     }
     bool valid = _setUpTensorInfo(allTensors, net);
+    schedule.validForResize = valid;
 
     std::vector<std::pair<Backend::Info, std::vector<PipelineInfo>>> result;
 
@@ -400,6 +401,7 @@ Schedule::ScheduleInfo Schedule::schedule(const Net* net, const std::vector<Sche
     for (auto index : inputIndexDiff) {
         schedule.inputTensors.insert(
             std::make_pair(net->tensorName()->GetAsString(index)->c_str(), allTensors[index].get()));
+        TensorUtils::getDescribe(allTensors[index].get())->usage = TensorUsage::INPUT;
     }
     for (auto index : outputIndexesDiff) {
         schedule.outputTensor.insert(
@@ -421,9 +423,9 @@ Schedule::ScheduleInfo Schedule::schedule(const Net* net, const std::vector<Sche
         }
     }
     for (auto outputIndex : outputIndexesDiff) {
+        TensorUtils::getDescribe(schedule.allTensors[outputIndex].second.get())->usage = TensorUsage::OUTPUT;
         schedule.allTensors[outputIndex].first += 1;
     }
-    schedule.library = net->gpulibrary();
     return schedule;
 }
 } // namespace MNN

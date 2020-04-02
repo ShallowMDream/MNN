@@ -10,8 +10,10 @@
 using namespace MNN;
 const std::set<MNN::OpType> NC4HW4_OPs = {
     MNN::OpType_Convolution,
+    MNN::OpType_Convolution3D,
     MNN::OpType_ConvolutionDepthwise,
     MNN::OpType_Pooling,
+    MNN::OpType_Pooling3D,
     MNN::OpType_ROIPooling,
     MNN::OpType_Resize,
     MNN::OpType_LSTM,
@@ -21,7 +23,6 @@ const std::set<MNN::OpType> NC4HW4_OPs = {
     MNN::OpType_Proposal,
     MNN::OpType_PriorBox,
     MNN::OpType_DetectionOutput,
-    MNN::OpType_Eltwise,
     MNN::OpType_LRN,
     MNN::OpType_Interp,
     MNN::OpType_Crop,
@@ -29,17 +30,19 @@ const std::set<MNN::OpType> NC4HW4_OPs = {
     MNN::OpType_TfQuantizedConv2D,
     MNN::OpType_QuantizedDepthwiseConv2D,
     MNN::OpType_BatchToSpaceND,
-    MNN::OpType_SpaceToBatchND,
     MNN::OpType_BatchNorm,
+    MNN::OpType_SpaceToBatchND,
+    MNN::OpType_InstanceNorm,
     MNN::OpType_Moments,
     MNN::OpType_QuantizedAvgPool,
     MNN::OpType_QuantizedAdd,
     MNN::OpType_PReLU,
+    MNN::OpType_Dilation2D,
 };
-const std::set<MNN::OpType> COMPABILITY_OPs = {
-    MNN::OpType_ReLU,    MNN::OpType_ReLU6,   MNN::OpType_Concat,        MNN::OpType_Slice,
-    MNN::OpType_Permute, MNN::OpType_Selu,    MNN::OpType_ConvertTensor, MNN::OpType_Sigmoid,
-    MNN::OpType_Cast,    MNN::OpType_Reshape, MNN::OpType_TanH,          MNN::OpType_Padding};
+const std::set<MNN::OpType> COMPABILITY_OPs = {MNN::OpType_ReLU,          MNN::OpType_ReLU6,   MNN::OpType_Concat,
+                                               MNN::OpType_Slice,         MNN::OpType_Permute, MNN::OpType_Selu,
+                                               MNN::OpType_ConvertTensor, MNN::OpType_Sigmoid, MNN::OpType_Cast,
+                                               MNN::OpType_Reshape,       MNN::OpType_TanH, MNN::OpType_Eltwise,    MNN::OpType_Padding, MNN::OpType_ELU, MNN::OpType_Dropout};
 
 static bool _OpNeedConvertContent(OpType type, int index) {
     switch (type) {
@@ -47,12 +50,17 @@ static bool _OpNeedConvertContent(OpType type, int index) {
         case OpType_PriorBox:
         case OpType_Const:
             return false;
+        case OpType_Convolution:
+        case OpType_Deconvolution:
+        case OpType_ConvolutionDepthwise:
+        case OpType_DeconvolutionDepthwise:
+        case OpType_Convolution3D:
         case OpType_Interp:
         case OpType_Crop:
         case OpType_Reshape:
         case OpType_Resize:
         case OpType_Padding:
-            if (1 == index) {
+            if (1 <= index) {
                 return false;
             }
             break;
@@ -65,7 +73,7 @@ class AddTensorFormatConverter : public PostConverter {
 public:
     virtual bool onExecute(std::unique_ptr<MNN::NetT>& net) const override {
         auto& mNet = net;
-        if (mNet->sourceType == MNN::NetSource_CAFFE) {
+        if (mNet->sourceType == MNN::NetSource_CAFFE || mNet->sourceType == MNN::NetSource_ONNX) {
             return true;
         }
 
@@ -121,6 +129,14 @@ public:
                 continue;
             }
             if (op->type == OpType_Padding) {
+                DCHECK(op->inputIndexes.size() == 2) << "Padding should have 2 inputs";
+                const int padValueIndex = op->inputIndexes[1];
+                auto padValueOp = PostTreatUtils::_findOpByOutputIndex(padValueIndex, mNet.get());
+                if(opType.find(padValueOp->name)->second == MNN::MNN_DATA_FORMAT_NCHW){
+                    iter++;
+                    continue;
+                }
+                
                 // Add Gather op for padding, turn nhwc -> nchw
                 std::unique_ptr<OpT> gatherIndex(new OpT);
                 gatherIndex->outputIndexes = {(int)mNet->tensorName.size()};
@@ -228,13 +244,13 @@ public:
             }
             if (MNN::OpType_Input == op->type) {
                 auto input = op->main.AsInput();
-                if (4 == input->dims.size()) {
-                    int h          = input->dims[1];
-                    int c          = input->dims[3];
-                    int w          = input->dims[2];
-                    input->dims[1] = c;
-                    input->dims[2] = h;
-                    input->dims[3] = w;
+                const int dimSize = input->dims.size();
+                if (dimSize > 2) {
+                    const int channel = input->dims[dimSize - 1];
+                    for (int i = dimSize - 1; i > 1; --i) {
+                        input->dims[i] = input->dims[i - 1];
+                    }
+                    input->dims[1] = channel;
                 }
             }
             if (MNN::OpType_Concat == op->type) {
@@ -270,33 +286,13 @@ public:
                     reshape->dims[axisMap[i]] = originDim[i];
                 }
             }
-            if (MNN::OpType_ArgMax == op->type) {
+            if (MNN::OpType_ArgMax == op->type || MNN::OpType_ArgMin == op->type) {
                 auto param      = op->main.AsArgMax();
                 auto originAxis = param->axis;
-                DCHECK(originAxis >= 0 && originAxis <= 3) << "ArgMax axis ERROR!";
+                DCHECK(originAxis >= 0 && originAxis <= 3) << "ArgMax / Argmin axis ERROR!";
                 param->axis = axisMap[originAxis];
             }
         }
-
-        std::set<int> tensorTypeSet;
-        for (auto& iter : mNet->extraTensorDescribe) {
-            auto index             = iter->index;
-            iter->blob->dataFormat = tensorType[index];
-            tensorTypeSet.insert(index);
-        }
-        for (auto iter : tensorType) {
-            if (tensorTypeSet.find(iter.first) != tensorTypeSet.end()) {
-                continue;
-            }
-            auto describe              = new MNN::TensorDescribeT;
-            describe->index            = iter.first;
-            describe->blob             = std::unique_ptr<MNN::BlobT>(new MNN::BlobT);
-            describe->blob->dataFormat = iter.second;
-            describe->blob->dataType   = MNN::DataType_DT_FLOAT;
-
-            mNet->extraTensorDescribe.push_back(std::unique_ptr<MNN::TensorDescribeT>(describe));
-        }
-
         return true;
     }
 };

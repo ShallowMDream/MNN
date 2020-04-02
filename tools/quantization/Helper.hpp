@@ -8,9 +8,9 @@
 
 #include <set>
 #include <string>
-#include "ImageProcess.hpp"
-#include "Tensor.hpp"
-#include "converter/source/IR/MNN_generated.h"
+#include <MNN/ImageProcess.hpp>
+#include <MNN/Tensor.hpp>
+#include "MNN_generated.h"
 #include "logkit.h"
 
 #pragma once

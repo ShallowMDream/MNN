@@ -6,14 +6,14 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 
-#include "Pipeline.hpp"
-#include "Backend.hpp"
-#include "Macro.h"
-#include "SizeComputer.hpp"
-#include "TensorUtils.hpp"
-#include "WrapExecution.hpp"
+#include "core/Pipeline.hpp"
+#include "core/Backend.hpp"
+#include "core/Macro.h"
+#include "core/SizeComputer.hpp"
+#include "core/TensorUtils.hpp"
+#include "core/WrapExecution.hpp"
 //#define MNN_OPEN_TIME_TRACE
-#include "AutoTime.hpp"
+#include <MNN/AutoTime.hpp>
 //#define MNN_DEBUG_TENSOR_SIZE
 namespace MNN {
 OperatorInfo::OperatorInfo() {
@@ -38,7 +38,8 @@ float OperatorInfo::flops() const {
 
 static Backend::StorageType _getTensorStorageType(const Tensor* tensor) {
     auto des = TensorUtils::getDescribe(tensor);
-    if (des->isConst || des->isInput) {
+    auto usage = des->usage;
+    if (TensorUsage::CONST == usage || TensorUsage::INPUT == usage || TensorUsage::TRAINABLE == usage) {
         return Backend::DYNAMIC_SEPERATE;
     }
     if (des->handleType != Tensor::HANDLE_NONE) {
@@ -49,10 +50,11 @@ static Backend::StorageType _getTensorStorageType(const Tensor* tensor) {
 
 static Backend::StorageType _getTensorReleaseStorageType(const Tensor* tensor) {
     auto des = TensorUtils::getDescribe(tensor);
+    auto usage = des->usage;
     if (des->handleType != Tensor::HANDLE_NONE) {
         return Backend::DYNAMIC_SEPERATE;
     }
-    if (des->isConst) {
+    if (TensorUsage::CONST == usage || TensorUsage::TRAINABLE == usage) {
         return Backend::DYNAMIC_SEPERATE;
     }
     return Backend::DYNAMIC;
@@ -87,7 +89,6 @@ Pipeline::Unit::Unit(const Op* op, const std::vector<Tensor*>& inputs, const std
     if (nullptr != typeStr) {
         mContent->type = typeStr;
     }
-    mComputer = SizeComputerSuite::get()->search(mType);
 }
 
 
@@ -111,7 +112,7 @@ bool Pipeline::Unit::_createExecution(Backend* bn, Backend* cpuBn) {
         }
     }
     if (needWrap) {
-        // FUNC_PRINT_ALL(mOriginOp->name()->c_str(), s);
+        // MNN_PRINT("need wrap run ==> %s, %s\n", MNN::EnumNameOpType(mOriginOp->type()), mOriginOp->name()->c_str());
         auto tempExecution = mExecution;
         mExecution.reset(new WrapExecution(cpuBn, tempExecution));
     }
@@ -125,9 +126,10 @@ ErrorCode Pipeline::Unit::execute() {
     if (mConst) {
         return NO_ERROR;
     }
+    // MNN_PRINT("\t==> execute op: %s, [%s]\n", mContent->name.c_str(), mContent->type.c_str());
     auto code = mExecution->onExecute(mInputs, mOutputs);
     if (NO_ERROR != code) {
-        MNN_ERROR("Execute Error for %s, code=%d\n", mContent->name.c_str(), code);
+        MNN_ERROR("Execute Error for [%s], %s, code=%d\n", MNN::EnumNameOpType(mOriginOp->type()), mContent->name.c_str(), code);
     }
     return code;
 }
@@ -142,7 +144,7 @@ ErrorCode Pipeline::Unit::executeCallBack(const TensorCallBackWithInfo& before, 
     if (run) {
         auto code = mExecution->onExecute(mInputs, mOutputs);
         if (NO_ERROR != code) {
-            MNN_ERROR("Execute Error for %s, code=%d\n", mContent->name.c_str(), code);
+            MNN_ERROR("Execute Error for [%s], %s, code=%d\n", MNN::EnumNameOpType(mOriginOp->type()), mContent->name.c_str(), code);
             return code;
         }
     }
@@ -154,6 +156,9 @@ ErrorCode Pipeline::Unit::executeCallBack(const TensorCallBackWithInfo& before, 
 }
 
 ErrorCode Pipeline::Unit::prepare(Backend* bn, Backend* cpuBn) {
+#ifdef MNN_DEBUG_TENSOR_SIZE
+    MNN_PRINT("\n===> prepare op: %s, [%s]\n", mOriginOp->name()->c_str(), MNN::EnumNameOpType(mOriginOp->type()));
+#endif
     for (auto t : mInputs) {
         bool valid = true;
         for (int i = 0; i < t->dimensions(); ++i) {
@@ -167,22 +172,21 @@ ErrorCode Pipeline::Unit::prepare(Backend* bn, Backend* cpuBn) {
             return COMPUTE_SIZE_ERROR;
         }
     }
-    {
-        auto success = _allocTensors(bn, mInputs);
-        if (!success) {
-            return OUT_OF_MEMORY;
-        }
-    }
     bool ready = SizeComputer::computeOutputSize(mOriginOp, mInputs, mOutputs);
     for (auto o : mOutputs) {
         if (o->size() <= 0) {
             ready = false;
         }
+        if (o->dimensions() < 4 && TensorUtils::getDescribe(o)->dimensionFormat == MNN_DATA_FORMAT_NC4HW4) {
+            for (auto index = o->dimensions(); index < 4; ++index) {
+                o->setLength(index, 1);
+            }
+        }
     }
     mContent->flops = SizeComputer::computeFlops(mOriginOp, mInputs, mOutputs);
 
 #ifdef MNN_DEBUG_TENSOR_SIZE
-    MNN_PRINT("\n===> compute shape: %s, [%d]\n", mOriginOp->name()->c_str(), mOriginOp->type());
+    MNN_PRINT("\t===> compute shape: %s, [%s]\n", mOriginOp->name()->c_str(), MNN::EnumNameOpType(mOriginOp->type()));
     if (mInputs.size()) {
         MNN_PRINT("Inputs:\n");
         for (auto o : mInputs) {
@@ -213,15 +217,21 @@ ErrorCode Pipeline::Unit::prepare(Backend* bn, Backend* cpuBn) {
     // Check const
     mConst = true;
     for (int i = 0; i < mInputs.size(); ++i) {
-        if (SizeComputer::opNeedContent(mOriginOp->type(), i) && (!TensorUtils::getDescribe(mInputs[i])->isConst)) {
+        if (SizeComputer::opNeedContent(mOriginOp->type(), i) && (TensorUtils::getDescribe(mInputs[i])->usage != TensorUsage::CONST)) {
             mConst = false;
             break;
         }
     }
+    if (mType == OpType_TrainableParam) {
+        for (auto t : mOutputs) {
+            TensorUtils::getDescribe(t)->usage = TensorUsage::TRAINABLE;
+        }
+        mConst = false;
+    }
 
     if (mConst) {
         for (auto t : mOutputs) {
-            TensorUtils::getDescribe(t)->isConst = true;
+            TensorUtils::getDescribe(t)->usage = TensorUsage::CONST;
         }
         bn = cpuBn;
     }
@@ -234,6 +244,12 @@ ErrorCode Pipeline::Unit::prepare(Backend* bn, Backend* cpuBn) {
         }
     }
     bn = mExecution->backend();
+    {
+        auto success = _allocTensors(bn, mInputs);
+        if (!success) {
+            return OUT_OF_MEMORY;
+        }
+    }
     {
         auto success = _allocTensors(bn, mOutputs);
         if (!success) {
@@ -272,10 +288,14 @@ ErrorCode Pipeline::Unit::prepare(Backend* bn, Backend* cpuBn) {
             des->backend->onReleaseBuffer(t, _getTensorReleaseStorageType(t));
         }
     }
+#ifdef MNN_DEBUG_TENSOR_SIZE
+    MNN_PRINT("%s prepare success\n", name().c_str());
+#endif
     return code;
 }
 
 Pipeline::Pipeline(const std::vector<Schedule::PipelineInfo>& infos, Backend* backend, Backend* cpuBackend) {
+    SizeComputerSuite::init();
     MNN_ASSERT(nullptr != backend);
     MNN_ASSERT(nullptr != cpuBackend);
     mBackupBackend = cpuBackend;
@@ -293,7 +313,7 @@ ErrorCode Pipeline::prepare() {
         auto code = u->prepare(mBackend, mBackupBackend);
         if (NO_ERROR != code) {
             if (nullptr != u->mOriginOp->name()) {
-                MNN_ERROR("Resize error for %s, code=%d\n", u->mOriginOp->name()->c_str(), code);
+                MNN_ERROR("Resize error for [%s], %s, code=%d\n", MNN::EnumNameOpType(u->mOriginOp->type()),u->mOriginOp->name()->c_str(), code);
             }
             return code;
         }
@@ -304,7 +324,8 @@ ErrorCode Pipeline::prepare() {
 
 ErrorCode Pipeline::execute() {
     mBackend->onExecuteBegin();
-    for (auto& u : mUnits) {
+    for (int i=0; i<mUnits.size(); ++i) {
+        auto& u = mUnits[i];
         auto code = u->execute();
         if (code != NO_ERROR) {
             mBackend->onExecuteEnd();

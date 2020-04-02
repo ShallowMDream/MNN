@@ -38,6 +38,17 @@ Converter由Frontends和Graph Optimize构成。前者负责支持不同的训练
 
 Interpreter由Engine和Backends构成。前者负责模型的加载、计算图的调度；后者包含各计算设备下的内存分配、Op实现。在Engine和Backends中，MNN应用了多种优化方案，包括在卷积和反卷积中应用Winograd算法、在矩阵乘法中应用Strassen算法、低精度计算、Neon优化、手写汇编、多线程优化、内存复用、异构计算等。
 
+## 论文
+如果MNN对你的研究有所助益，欢迎引用MNN的论文：
+
+    @inproceedings{alibaba2020mnn,
+      author = {Jiang, Xiaotang and Wang, Huan and Chen, Yiliu and Wu, Ziqi and Wang, Lichuan and Zou, Bin and Yang, Yafeng and Cui, Zongyang and Cai, Yu and Yu, Tianhang and Lv, Chengfei and Wu, Zhihua},
+      title = {MNN: A Universal and Efficient Inference Engine},
+      booktitle = {MLSys},
+      year = {2020}
+    }
+
+
 ## 开始使用
 - [使用方法](https://www.yuque.com/mnn/cn/usage)
 - [算子列表](https://www.yuque.com/mnn/en/ops)
@@ -63,7 +74,8 @@ Interpreter由Engine和Backends构成。前者负责模型的加载、计算图�
 
 扫描二维码加入钉钉讨论群。
 
-<img src="doc/QRCodeDingDing.png" height="256"/>
+<img src="doc/DingTalkQR1.png" height="256"/>
+<img src="doc/DingTalkQR2.png" height="256"/>
 
 ## License
 Apache 2.0
@@ -86,3 +98,6 @@ MNN参考、借鉴了下列项目：
 - [paddle-mobile](https://github.com/PaddlePaddle/paddle-mobile)
 - [stb](https://github.com/nothings/stb)
 - [rapidjson](https://github.com/Tencent/rapidjson)
+- [pybind11](https://github.com/pybind/pybind11)
+- [pytorch](https://github.com/pytorch/pytorch)
+- [bolt](https://github.com/huawei-noah/bolt)

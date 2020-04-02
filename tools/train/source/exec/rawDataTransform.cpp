@@ -6,11 +6,11 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 
+#include <MNN/MNNDefine.h>
 #include <fstream>
 #include <map>
 #include <sstream>
-#include "MNNDefine.h"
-#include "converter/source/IR/MNN_generated.h"
+#include "MNN_generated.h"
 #include "rapidjson/document.h"
 using namespace MNN;
 

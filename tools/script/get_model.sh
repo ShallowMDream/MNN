@@ -3,19 +3,11 @@
 pushd "$(dirname $0)"/../.. > /dev/null
 pushd resource > /dev/null
 
-# mkdir
-if [ ! -d build ]; then
-  mkdir build
-fi
-
 # build converter
-CONVERTER=build/MNNConvert
-if [ ! -e $CONVERTER ]; then
-  echo "building converter ..."
-  pushd ../tools/converter > /dev/null
-  ./build_tool.sh
-  popd > /dev/null
-  cp ../tools/converter/build/MNNConvert $CONVERTER
+CONVERTER=../build/MNNConvert
+if [ ! -e ${CONVERTER} ]; then
+  echo "can't find ${CONVERTER}, building converter firstly "
+  exit
 fi
 
 # functions
@@ -35,12 +27,14 @@ download() {
 
 get_caffe1() { # model_URL, model_path, prototxt_URL, prototxt_path, model, MNN_path
   if [ ! -e $6 ]; then
+    echo "download and convert $2 $4"
     download $1 $2 && download $3 $4 && ./$CONVERTER -f CAFFE --modelFile $2 --prototxt $4 --MNNModel $6 --bizCode 0000
   fi
 }
 
 get_tensorflow_lite() {
   if [ ! -e $4 ]; then
+    mkdir -p build
     pushd build > /dev/null
     download $1 $2.tgz && tar -xzf $2.tgz $2
     succ=$?
@@ -51,6 +45,7 @@ get_tensorflow_lite() {
 
 get_portrait_lite() {
   if [ ! -e $4 ]; then
+    mkdir -p build
     pushd build > /dev/null
     download $1 $2
     succ=$?

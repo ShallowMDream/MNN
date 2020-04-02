@@ -6,14 +6,14 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 
-#include "ConvolutionWinograd.hpp"
+#include "backend/cpu/compute/ConvolutionWinograd.hpp"
 #include <math.h>
-#include "CommonOptFunction.h"
-#include "Concurrency.h"
-#include "ConvOpt.h"
-#include "Macro.h"
-#include "TensorUtils.hpp"
-#include "WingoradGenerater.hpp"
+#include "backend/cpu/compute/CommonOptFunction.h"
+#include "core/Concurrency.h"
+#include "backend/cpu/compute/ConvOpt.h"
+#include "core/Macro.h"
+#include "core/TensorUtils.hpp"
+#include "math/WingoradGenerater.hpp"
 #ifdef MNN_USE_NEON
 #include <arm_neon.h>
 #endif
@@ -310,7 +310,7 @@ int ConvolutionWinograd::bestWinogradUnit(const Convolution2DCommon *common, con
         /*Let F(6,3) be choosed when it can speed up from F(2,3) than 0.6*/
         float penalty = (su * su) / (float)(kernelSize * kernelSize) * 0.12f;
         float winogradCost =
-            (2 * su * su * su * ic + su * su * ic * oc + 2 * su * u * u * oc) * (UP_DIV(ow, u) * UP_DIV(oh, u));
+            (2 * su * su * ic + su * su * ic * oc + (su + u) * u * oc) * (UP_DIV(ow, u) * UP_DIV(oh, u));
         float reduceRate = originCost / winogradCost - penalty;
         // MNN_PRINT("ow=%d, oh=%d, %f, %f, winograd unit:%d\n", ow, oh, winogradCost, reduceRate, u);
         if (reduceRate > maxRate) {

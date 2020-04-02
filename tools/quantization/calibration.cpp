@@ -11,15 +11,15 @@
 #include <fstream>
 #include <iostream>
 #include <set>
-#include "ImageProcess.hpp"
+#include <MNN/ImageProcess.hpp>
 #include "flatbuffers/util.h"
 #include "logkit.h"
 #include "quantizeWeight.hpp"
 #include "rapidjson/document.h"
 //#define MNN_OPEN_TIME_TRACE
-#include "AutoTime.hpp"
+#include <MNN/AutoTime.hpp>
 #include "Helper.hpp"
-#include "TensorUtils.hpp"
+#include "core/TensorUtils.hpp"
 
 using namespace MNN::CV;
 
@@ -479,7 +479,7 @@ void Calibration::_insertDequantize() {
             // construct new op
             auto dequantizationOp       = new MNN::OpT;
             dequantizationOp->main.type = MNN::OpParameter_QuantizedFloatParam;
-            dequantizationOp->name      = "___Int8ToFloat___For_" + name;
+            dequantizationOp->name      = "___Int8ToFloat___For_" + name + flatbuffers::NumToString(i);
 
             dequantizationOp->type           = MNN::OpType_Int8ToFloat;
             auto dequantizationParam         = new MNN::QuantizedFloatParamT;
@@ -510,7 +510,7 @@ void Calibration::_insertDequantize() {
             // construct one quantization op(FloatToInt8)
             auto quantizationOp        = new MNN::OpT;
             quantizationOp->main.type  = MNN::OpParameter_QuantizedFloatParam;
-            quantizationOp->name       = name + "___FloatToInt8___";
+            quantizationOp->name       = name + "___FloatToInt8___" + flatbuffers::NumToString(i);
             quantizationOp->type       = MNN::OpType_FloatToInt8;
             auto quantizationParam     = new MNN::QuantizedFloatParamT;
             quantizationOp->main.value = quantizationParam;
@@ -522,9 +522,9 @@ void Calibration::_insertDequantize() {
 
             quantizationOp->inputIndexes.push_back(_originaleModel->tensorName.size());
             quantizationOp->outputIndexes.push_back(outputIndex);
-            _originaleModel->tensorName.push_back(_originaleModel->tensorName[op->outputIndexes[i]]);
-            _originaleModel->tensorName[op->outputIndexes[i]] = quantizationOp->name;
-            op->outputIndexes[i]                              = quantizationOp->inputIndexes[i];
+            _originaleModel->tensorName.push_back(_originaleModel->tensorName[outputIndex]);
+            _originaleModel->tensorName[outputIndex] = quantizationOp->name;
+            op->outputIndexes[i]                              = quantizationOp->inputIndexes[0];
 
             iter = _originaleModel->oplists.insert(iter, std::unique_ptr<MNN::OpT>(quantizationOp));
             iter++;

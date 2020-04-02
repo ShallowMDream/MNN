@@ -6,9 +6,9 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 
-#include "Macro.h"
-#include "SizeComputer.hpp"
-#include "TensorUtils.hpp"
+#include "core/Macro.h"
+#include "core/SizeComputer.hpp"
+#include "core/TensorUtils.hpp"
 namespace MNN {
 
 class TransposeComputer : public SizeComputer {
@@ -29,7 +29,7 @@ class TransposeComputer : public SizeComputer {
         }
 
         outputs[0]->buffer().dimensions = dims;
-
+        outputs[0]->buffer().type = input->getType();
         for (int i = 0; i < dims; ++i) {
             const int32_t d                    = permutation[i];
             outputs[0]->buffer().dim[i].extent = input->buffer().dim[d].extent;

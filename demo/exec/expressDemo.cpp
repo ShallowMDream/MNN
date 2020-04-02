@@ -1,13 +1,12 @@
-
-#include "Expr.hpp"
-#include "ExprCreator.hpp"
-#include "Optimizer.hpp"
+#include <MNN/expr/Expr.hpp>
+#include <MNN/expr/ExprCreator.hpp>
+#include <MNN/expr/Executor.hpp>
 #include <string>
 #include <map>
 #include <fstream>
 #include <sstream>
 #define MNN_OPEN_TIME_TRACE
-#include "AutoTime.hpp"
+#include <MNN/AutoTime.hpp>
 using namespace MNN::Express;
 #define UP_DIV(x) (((x)+3)/4)
 
@@ -15,11 +14,18 @@ static std::pair<VARP, VARP> _makeConvolution(int k, int ic, int oc, int size) {
     auto input = _Input({1, ic, size, size}, NC4HW4);
     return std::make_pair(input, _Conv(0.0f, 0.0f, input, {ic, oc}, {k, k}, SAME));
 }
+static std::pair<VARP, VARP> _makeGEMMByMatMul(int e, int l, int h) {
+    auto a = _Input({e, l});
+    std::vector<float> weight(l*h);
+    auto b = _Const(weight.data(), {l, h});
+    auto c = _MatMul(a, b);
+    return std::make_pair(a, c);
+}
 
 static std::pair<VARP, VARP> _makeGEMMByConvolution(int e, int l, int h) {
     auto icC4 = UP_DIV(l);
     auto ocC4 = UP_DIV(h);
-    
+
     auto input = _Input({1, icC4*4, 1, e});
     return std::make_pair(input, _Conv(0.0f, 0.0f, input, {icC4*4, ocC4*4}, {1, 1}));
 }
@@ -87,7 +93,7 @@ static void _testGEMM() {
         auto flops = (float)x * (float)y * (float)z / 1024.0f / 1024.0f;
         FUNC_PRINT_ALL(flops, f);
     }
-    
+
     auto conv = _makeGEMMByConvolution(1024, 1024, 1024);
     for (int v=0; v<10; ++v) {
         conv.first->writeMap<float>();
@@ -105,6 +111,16 @@ static void _testGEMM() {
             conv.second->unMap();
         }
     }
+    for (int i=0; i<size.size(); ++i) {
+        conv = _makeGEMMByMatMul(size[i][0], size[i][1], size[i][2]);
+        AUTOTIME;
+        for (int v=0; v<10; ++v) {
+            conv.first->writeMap<float>();
+            conv.first->unMap();
+            conv.second->readMap<float>();
+            conv.second->unMap();
+        }
+    }
 }
 
 int main(int argc, const char* argv[]) {
@@ -114,24 +130,25 @@ int main(int argc, const char* argv[]) {
     }
     auto modelFileName = argv[1];
     FUNC_PRINT_ALL(modelFileName, s);
-    auto device = Optimizer::CPU;
+    auto exe = Executor::getGlobalExecutor();
+    MNN::BackendConfig config;
+    config.precision = MNN::BackendConfig::Precision_Low;
+    MNNForwardType forwardType = MNN_FORWARD_CPU;
     if (argc >= 3) {
-        device = (Optimizer::Device)atoi(argv[2]);
+        forwardType = (MNNForwardType)atoi(argv[2]);
     }
-    auto model = Model::load(modelFileName);
-    auto optimizer = Optimizer::create(device);
-    if (nullptr == optimizer) {
-        MNN_ERROR("Can't find optimizer for %d\n", device);
-        return 0;
-    }
+    exe->setGlobalExecutorConfig(forwardType, config, 4);
+    auto model = Variable::loadMap(modelFileName);
+    auto inputOutput = Variable::getInputAndOutput(model);
+    auto inputs = inputOutput.first;
+    auto outputs = inputOutput.second;
     int testTime = 10;
     if (argc >= 4) {
         testTime = atoi(argv[3]);
     }
-    optimizer->onExecute(model);
-    model.save("temp.mnn");
-    auto input = model.inputs[0];
-    auto output = model.outputs[0];
+    Variable::save(Variable::mapToSequence(outputs), "temp.mnn");
+    auto input = inputs.begin()->second;
+    auto output = outputs.begin()->second;
     //input->resize({1, 224, 224, 3});
     auto inputInfo = input->getInfo();
     if (nullptr == inputInfo) {
@@ -143,11 +160,6 @@ int main(int argc, const char* argv[]) {
         inputInfo = input->getInfo();
         if (output->getInfo()->order == NC4HW4) {
             output = _Convert(output, NCHW);
-        }
-        //Init
-        bool success = output->expr().first->requireAlloc();
-        if (!success) {
-            return 0;
         }
     }
     auto outputInfo = output->getInfo();
@@ -182,7 +194,7 @@ int main(int argc, const char* argv[]) {
         }
         input->unMap();
     }
-    
+
     {
         auto outputPtr = output->readMap<float>();
         if (nullptr == outputPtr) {

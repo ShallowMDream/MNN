@@ -2,6 +2,8 @@
 
 [中文版本](README_CN.md)
 
+[![Build Status](https://travis-ci.com/alibaba/MNN.svg?branch=master)](https://travis-ci.com/alibaba/MNN)
+
 ## Intro
 MNN is a lightweight deep neural network inference engine. It loads models and do inference on devices. At present, MNN has been integrated in more than 20 apps of Alibaba-inc, such as Taobao, Tmall, Youku and etc., covering live broadcast, short video capture, search recommendation, product searching by image, interactive marketing, equity distribution, security risk control and other scenarios. In addition, MNN is also used on embedded devices, such as IoT.
 
@@ -38,6 +40,16 @@ Converter consists of Frontends and Graph Optimize. The former is responsible fo
 
 Interpreter consists of Engine and Backends. The former is responsible for the loading of the model and the scheduling of the calculation graph; the latter includes the memory allocation and the Op implementation under each computing device. In Engine and Backends, MNN applies a variety of optimization schemes, including applying Winograd algorithm in convolution and deconvolution, applying Strassen algorithm in matrix multiplication, low-precision calculation, Neon optimization, hand-written assembly, multi-thread optimization, memory reuse, heterogeneous computing, etc.
 
+## Paper
+Please cite MNN in your publications if it helps your research:
+
+    @inproceedings{alibaba2020mnn,
+      author = {Jiang, Xiaotang and Wang, Huan and Chen, Yiliu and Wu, Ziqi and Wang, Lichuan and Zou, Bin and Yang, Yafeng and Cui, Zongyang and Cai, Yu and Yu, Tianhang and Lv, Chengfei and Wu, Zhihua},
+      title = {MNN: A Universal and Efficient Inference Engine},
+      booktitle = {MLSys},
+      year = {2020}
+    }
+
 ## Quick start
 - [Usage](https://www.yuque.com/mnn/en/usage)
 - [Supported Operators](https://www.yuque.com/mnn/en/ops)
@@ -62,7 +74,8 @@ Interpreter consists of Engine and Backends. The former is responsible for the l
 
 Scan QR code to join DingDing discussion group.
 
-<img src="doc/QRCodeDingDing.png" height="256"/>
+<img src="doc/DingTalkQR1.png" height="256"/>
+<img src="doc/DingTalkQR2.png" height="256"/>
 
 ## License
 Apache 2.0
@@ -85,4 +98,6 @@ MNN refers to the following projects:
 - [paddle-mobile](https://github.com/PaddlePaddle/paddle-mobile)
 - [stb](https://github.com/nothings/stb)
 - [rapidjson](https://github.com/Tencent/rapidjson)
-
+- [pybind11](https://github.com/pybind/pybind11)
+- [pytorch](https://github.com/pytorch/pytorch)
+- [bolt](https://github.com/huawei-noah/bolt)

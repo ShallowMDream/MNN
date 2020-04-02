@@ -33,9 +33,13 @@ public:
                         turnConv2DW = common->outputCount == common->group && ci == common->outputCount;
                     }
                 } else {
-                    const int srcCount =
-                        conv2D->weight.size() * common->group / common->outputCount / common->kernelX / common->kernelY;
-                    turnConv2DW = common->outputCount == common->group && srcCount == common->outputCount;
+                    // const int srcCount =
+                    //     conv2D->weight.size() * common->group / common->outputCount / common->kernelX /
+                    //     common->kernelY;
+                    // get srcCount from conv param common args: inputCount, not use weight to compute(in some case,
+                    // weight is empty)
+                    const int srcCount = common->inputCount;
+                    turnConv2DW        = common->outputCount == common->group && srcCount == common->outputCount;
                 }
 
                 if (turnConv2DW) {
@@ -67,8 +71,9 @@ public:
                 continue;
             }
 
-            int srcCount =
-                conv2D->weight.size() * common->group / common->outputCount / common->kernelX / common->kernelY;
+            // int srcCount =
+            //     conv2D->weight.size() * common->group / common->outputCount / common->kernelX / common->kernelY;
+            const int srcCount = common->inputCount;
 
             DCHECK(srcCount % common->group == 0 && common->outputCount % common->group == 0)
                 << "split group convolution ERROR! ==> " << op->name;
@@ -133,9 +138,11 @@ public:
                 newConvolutionT->common->group       = 1;
                 newConvolutionT->common->padMode     = common->padMode;
                 newConvolutionT->common->outputCount = common->outputCount / common->group;
+                newConvolutionT->common->inputCount = common->inputCount / common->group;
                 newConvolutionT->common->padX        = common->padX;
                 newConvolutionT->common->padY        = common->padY;
                 newConvolutionT->common->relu        = common->relu;
+                newConvolutionT->common->relu6 = common->relu6;
 
                 int startWeight = partWeightSize * i;
                 int startBias   = partBiasSize * i;
